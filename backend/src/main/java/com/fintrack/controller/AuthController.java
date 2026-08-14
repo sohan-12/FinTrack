@@ -30,6 +30,15 @@ public class AuthController {
         this.authService = authService;
     }
 
+    @PostMapping("/send-otp")
+    public ResponseEntity<java.util.Map<String, String>> sendOtp(@RequestBody java.util.Map<String, String> body) {
+        String email = body.get("email");
+        authService.generateRegistrationOtp(email);
+        java.util.Map<String, String> res = new java.util.HashMap<>();
+        res.put("message", "A 6-digit verification code has been sent to " + email);
+        return ResponseEntity.ok(res);
+    }
+
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest request) {
         AuthResponse response = authService.register(request);
@@ -56,5 +65,18 @@ public class AuthController {
         }
         UserResponse user = authService.getCurrentUser(authUser.getId());
         return ResponseEntity.ok(user);
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/password")
+    public ResponseEntity<java.util.Map<String, String>> updatePassword(@RequestBody java.util.Map<String, String> body, HttpServletRequest request) {
+        AuthenticatedUser authUser = (AuthenticatedUser) request.getAttribute("authenticatedUser");
+        if (authUser == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String newPassword = body.get("password");
+        authService.updatePassword(authUser.getId(), newPassword);
+        java.util.Map<String, String> res = new java.util.HashMap<>();
+        res.put("message", "Password updated successfully! You can now sign in using either Google OAuth or your Email & Password.");
+        return ResponseEntity.ok(res);
     }
 }

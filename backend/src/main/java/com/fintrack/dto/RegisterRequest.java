@@ -1,22 +1,24 @@
 package com.fintrack.dto;
 
 /**
- * Registration Request DTO.
+ * Registration Request DTO with OTP verification code.
  */
 public class RegisterRequest {
     private String name;
     private String email;
     private String password;
     private String confirmPassword;
+    private String otp;
 
     public RegisterRequest() {
     }
 
-    public RegisterRequest(String name, String email, String password, String confirmPassword) {
+    public RegisterRequest(String name, String email, String password, String confirmPassword, String otp) {
         this.name = name;
         this.email = email;
         this.password = password;
         this.confirmPassword = confirmPassword;
+        this.otp = otp;
     }
 
     public String getName() {
@@ -49,5 +51,13 @@ public class RegisterRequest {
 
     public void setConfirmPassword(String confirmPassword) {
         this.confirmPassword = confirmPassword;
+    }
+
+    public String getOtp() {
+        return otp;
+    }
+
+    public void setOtp(String otp) {
+        this.otp = otp;
     }
 }

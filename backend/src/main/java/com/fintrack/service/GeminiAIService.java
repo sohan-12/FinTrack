@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -19,7 +20,7 @@ import java.util.Map;
 
 /**
  * Gemini AI Service communicating directly with Google Generative AI REST API.
- * Uses structured JSON requests and parses Gemini model responses.
+ * Supports auto-fallback across Gemini model endpoints for maximum reliability.
  */
 @Service
 public class GeminiAIService {
@@ -32,8 +33,12 @@ public class GeminiAIService {
     @Value("${gemini.api.key:}")
     private String apiKey;
 
-    @Value("${gemini.api.url:https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent}")
-    private String apiUrl;
+    private final List<String> modelEndpoints = Arrays.asList(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    );
 
     public GeminiAIService(RestTemplate restTemplate, ObjectMapper objectMapper) {
         this.restTemplate = restTemplate;
@@ -50,49 +55,49 @@ public class GeminiAIService {
             return null;
         }
 
-        try {
-            String fullUrl = apiUrl + "?key=" + apiKey.trim();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
+        Map<String, Object> part = new HashMap<>();
+        String combinedPrompt = (systemInstruction != null && !systemInstruction.isEmpty())
+                ? systemInstruction + "\n\n" + prompt
+                : prompt;
+        part.put("text", combinedPrompt);
 
-            // Construct Gemini Payload
-            Map<String, Object> part = new HashMap<>();
-            String combinedPrompt = (systemInstruction != null && !systemInstruction.isEmpty())
-                    ? systemInstruction + "\n\n" + prompt
-                    : prompt;
-            part.put("text", combinedPrompt);
+        Map<String, Object> content = new HashMap<>();
+        content.put("parts", Collections.singletonList(part));
 
-            Map<String, Object> content = new HashMap<>();
-            content.put("parts", Collections.singletonList(part));
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("contents", Collections.singletonList(content));
 
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("contents", Collections.singletonList(content));
+        Map<String, Object> generationConfig = new HashMap<>();
+        generationConfig.put("temperature", 0.7);
+        generationConfig.put("maxOutputTokens", 800);
+        requestBody.put("generationConfig", generationConfig);
 
-            // Set generation config for concise, structured financial responses
-            Map<String, Object> generationConfig = new HashMap<>();
-            generationConfig.put("temperature", 0.7);
-            generationConfig.put("maxOutputTokens", 800);
-            requestBody.put("generationConfig", generationConfig);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+        for (String endpoint : modelEndpoints) {
+            try {
+                String fullUrl = endpoint + "?key=" + apiKey.trim();
+                ResponseEntity<String> response = restTemplate.postForEntity(fullUrl, entity, String.class);
 
-            ResponseEntity<String> response = restTemplate.postForEntity(fullUrl, entity, String.class);
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                JsonNode root = objectMapper.readTree(response.getBody());
-                JsonNode candidates = root.path("candidates");
-                if (candidates.isArray() && candidates.size() > 0) {
-                    JsonNode textNode = candidates.get(0).path("content").path("parts").get(0).path("text");
-                    if (!textNode.isMissingNode()) {
-                        return textNode.asText();
+                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                    JsonNode root = objectMapper.readTree(response.getBody());
+                    JsonNode candidates = root.path("candidates");
+                    if (candidates.isArray() && candidates.size() > 0) {
+                        JsonNode textNode = candidates.get(0).path("content").path("parts").get(0).path("text");
+                        if (!textNode.isMissingNode()) {
+                            return textNode.asText();
+                        }
                     }
                 }
+            } catch (Exception e) {
+                logger.debug("Attempt with endpoint {} returned: {}", endpoint, e.getMessage());
             }
-        } catch (Exception e) {
-            logger.warn("Failed to reach Gemini API: {}. Falling back to rule-based analysis.", e.getMessage());
         }
 
+        logger.warn("Could not reach Gemini model endpoints. Falling back to rule-based analysis.");
         return null;
     }
 

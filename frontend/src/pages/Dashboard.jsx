@@ -238,7 +238,7 @@ export const Dashboard = () => {
         </div>
 
         {/* Middle Section: Charts & AI Insights */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '24px', marginBottom: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginBottom: '24px' }}>
           {/* AI Insights Card */}
           <AiInsightsCard
             insights={aiInsights}
@@ -262,7 +262,7 @@ export const Dashboard = () => {
         </div>
 
         {/* Second Row: Monthly Trends & Category Doughnut */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '24px', marginBottom: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginBottom: '24px' }}>
           {/* Monthly Comparison */}
           <div className="card">
             <div className="card-header">

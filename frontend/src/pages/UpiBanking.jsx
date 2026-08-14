@@ -60,25 +60,19 @@ export const UpiBanking = () => {
   const [cards, setCards] = useState(() => {
     try {
       const saved = localStorage.getItem(userCardsKey);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Purge any legacy demo HDFC / 4892 cards
+          const realCards = parsed.filter((c) => c.id !== 'card-1' && c.last4 !== '4892' && c.bankName !== 'HDFC Bank');
+          return realCards;
+        }
+      }
     } catch (e) {
       console.warn('Failed to parse cards:', e);
     }
-    // Default starter card for new user with their actual name
-    return [
-      {
-        id: 'card-1',
-        bankName: 'HDFC Bank',
-        cardHolder: user?.name || 'Sohan Kumar Sahu',
-        last4: '4892',
-        cardType: 'Debit Card',
-        network: 'Visa',
-        expiry: '09/28',
-        balance: 12450.00,
-        gradient: 'linear-gradient(135deg, #1E293B 0%, #0F172A 100%)',
-        isPrimary: true,
-      },
-    ];
+    // Clean empty state for new user until they link a real card
+    return [];
   });
 
   const [activeCardIndex, setActiveCardIndex] = useState(0);
@@ -91,6 +85,7 @@ export const UpiBanking = () => {
   const [newCardType, setNewCardType] = useState('Debit Card');
   const [newNetwork, setNewNetwork] = useState('Visa');
   const [newExpiry, setNewExpiry] = useState('08/29');
+  const [newCvv, setNewCvv] = useState('');
   const [newCardBalance, setNewCardBalance] = useState('5000.00');
   const [newGradient, setNewGradient] = useState('linear-gradient(135deg, #1E3A8A 0%, #0F172A 100%)');
 
@@ -298,7 +293,7 @@ export const UpiBanking = () => {
 
   const connectedApps = upiApps.filter((a) => a.connected);
   const availableApps = upiApps.filter((a) => !a.connected);
-  const activeCard = cards[activeCardIndex] || cards[0];
+  const activeCard = (cards && cards.length > 0) ? (cards[activeCardIndex] || cards[0]) : null;
 
   return (
     <div>
@@ -309,7 +304,7 @@ export const UpiBanking = () => {
 
       <div className="content-area">
         {/* Top Summary: User Bank Card Wallet & Global Aggregator */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' }}>
           
           {/* USER CUSTOM DEBIT / CREDIT CARD */}
           <div
@@ -337,13 +332,13 @@ export const UpiBanking = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Building size={20} color="#FDBA74" />
                 <span style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '0.5px' }}>
-                  {activeCard?.bankName || 'HDFC BANK'}
+                  {activeCard ? activeCard.bankName : 'No Bank Linked'}
                 </span>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '0.7rem', fontWeight: 800, padding: '3px 8px', borderRadius: '9999px', background: 'rgba(255, 255, 255, 0.18)', color: '#F8FAFC', border: '1px solid rgba(255, 255, 255, 0.25)' }}>
-                  {activeCard?.cardType || 'DEBIT CARD'}
+                  {activeCard ? activeCard.cardType : 'NO CARD'}
                 </span>
 
                 <button
@@ -353,8 +348,8 @@ export const UpiBanking = () => {
                     background: 'rgba(255, 107, 0, 0.85)',
                     border: 'none',
                     borderRadius: '50%',
-                    width: '28px',
-                    height: '28px',
+                    width: '30px',
+                    height: '30px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -375,8 +370,8 @@ export const UpiBanking = () => {
                 <div style={{ width: '38px', height: '26px', background: 'linear-gradient(135deg, #FDE68A 0%, #D97706 100%)', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.4)' }}></div>
                 <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.7)', letterSpacing: '1px' }}>CONTACTLESS CHIP</div>
               </div>
-              <div style={{ fontSize: '1.25rem', letterSpacing: '4px', fontWeight: 700, fontFamily: 'monospace' }}>
-                •••• •••• •••• {activeCard?.last4 || '4892'}
+              <div style={{ fontSize: 'clamp(0.95rem, 4.5vw, 1.25rem)', letterSpacing: 'clamp(2px, 1vw, 4px)', fontWeight: 700, fontFamily: 'monospace' }}>
+                {activeCard ? `XXXX XXXX XXXX ${activeCard.last4}` : 'XXXX XXXX XXXX XXXX'}
               </div>
             </div>
 
@@ -385,17 +380,17 @@ export const UpiBanking = () => {
               <div>
                 <div style={{ fontSize: '0.65rem', color: 'rgba(255, 255, 255, 0.65)', textTransform: 'uppercase' }}>CARDHOLDER</div>
                 <div style={{ fontSize: '0.9rem', fontWeight: 700, letterSpacing: '0.5px' }}>
-                  {activeCard?.cardHolder || user?.name || 'Sohan Kumar Sahu'}
+                  {activeCard ? activeCard.cardHolder : (user?.name || 'Your Name')}
                 </div>
               </div>
 
               <div>
                 <div style={{ fontSize: '0.65rem', color: 'rgba(255, 255, 255, 0.65)', textTransform: 'uppercase' }}>EXPIRES</div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{activeCard?.expiry || '09/28'}</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{activeCard ? activeCard.expiry : '--/--'}</div>
               </div>
 
               <div style={{ fontWeight: 900, fontSize: '1.1rem', fontStyle: 'italic', color: '#F8FAFC' }}>
-                {activeCard?.network || 'VISA'}
+                {activeCard ? activeCard.network : 'CARD'}
               </div>
             </div>
 
@@ -467,13 +462,13 @@ export const UpiBanking = () => {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: '12px', marginTop: '12px' }}>
               <button
                 onClick={() => setIsAddCardModalOpen(true)}
                 className="btn btn-secondary"
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.85rem' }}
+                style={{ padding: '12px 14px', fontWeight: 700, fontSize: '0.875rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
               >
-                <Plus size={15} color="#FF6B00" />
+                <Plus size={16} color="#FF6B00" />
                 <span>Add Bank Card</span>
               </button>
 
@@ -481,9 +476,9 @@ export const UpiBanking = () => {
                 onClick={handleAutoSync}
                 className="btn btn-primary"
                 disabled={syncLoading}
-                style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.85rem' }}
+                style={{ padding: '12px 16px', fontWeight: 700, fontSize: '0.875rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
               >
-                <RefreshCw size={15} className={syncLoading ? 'spin' : ''} />
+                <RefreshCw size={16} className={syncLoading ? 'spin' : ''} />
                 <span>{syncLoading ? 'Syncing...' : 'Sync Connected Apps'}</span>
               </button>
             </div>
@@ -546,7 +541,6 @@ export const UpiBanking = () => {
                           </div>
                           <div>
                             <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0F172A' }}>{app.name}</div>
-                            <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{app.bankName}</div>
                           </div>
                         </div>
 
@@ -627,7 +621,6 @@ export const UpiBanking = () => {
                       </div>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A' }}>{app.name}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{app.bankName}</div>
                       </div>
                     </div>
 
@@ -647,7 +640,7 @@ export const UpiBanking = () => {
         </div>
 
         {/* SECTION 2: INSTANT PAYMENT & RECENT LEDGER */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '24px', marginBottom: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginBottom: '24px' }}>
           {/* Quick Pay Form */}
           <div className="card">
             <div className="card-header">
@@ -887,20 +880,20 @@ export const UpiBanking = () => {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
-                <div className="form-group">
-                  <label className="form-label">Card Number (16 Digits)</label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={19}
-                    className="form-input"
-                    placeholder="4532 8921 7731 8842"
-                    value={newCardNumber}
-                    onChange={(e) => setNewCardNumber(e.target.value)}
-                  />
-                </div>
+              <div className="form-group">
+                <label className="form-label">Card Number (16 Digits)</label>
+                <input
+                  type="text"
+                  required
+                  maxLength={19}
+                  className="form-input"
+                  placeholder="4532 8921 7731 8842"
+                  value={newCardNumber}
+                  onChange={(e) => setNewCardNumber(e.target.value)}
+                />
+              </div>
 
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div className="form-group">
                   <label className="form-label">Expiry (MM/YY)</label>
                   <input
@@ -911,6 +904,20 @@ export const UpiBanking = () => {
                     placeholder="08/29"
                     value={newExpiry}
                     onChange={(e) => setNewExpiry(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">CVV / CVC (3 Digits)</label>
+                  <input
+                    type="password"
+                    required
+                    maxLength={4}
+                    className="form-input"
+                    placeholder="•••"
+                    style={{ letterSpacing: '6px', textAlign: 'center' }}
+                    value={newCvv}
+                    onChange={(e) => setNewCvv(e.target.value)}
                   />
                 </div>
               </div>

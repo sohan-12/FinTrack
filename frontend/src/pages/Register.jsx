@@ -1,22 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useGoogleLogin } from '@react-oauth/google';
-import { Flame, Lock, Mail, User, ArrowRight } from 'lucide-react';
+import { authService } from '../services/authService';
+import { Flame, Lock, Mail, User, ArrowRight, Check, X, ShieldCheck, RefreshCw, ArrowLeft, KeyRound } from 'lucide-react';
 
 export const Register = () => {
+  // Step 1: Details, Step 2: Email OTP Verification
+  const [step, setStep] = useState(1);
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [otp, setOtp] = useState('');
+  const [countdown, setCountdown] = useState(60);
+  const [canResend, setCanResend] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { register, googleLogin } = useAuth();
+  const { register, addToast } = useAuth();
   const navigate = useNavigate();
 
-  const handleRegister = async (e) => {
+  // Password validation rules
+  const isMinLength = password.length >= 8;
+  const isFirstUpper = password.length > 0 && /^[A-Z]/.test(password);
+  const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+  const isPasswordValid = isMinLength && isFirstUpper && hasSpecialChar;
+
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    let timer;
+    if (step === 2 && countdown > 0) {
+      timer = setInterval(() => {
+        setCountdown((prev) => prev - 1);
+      }, 1000);
+    } else if (countdown === 0) {
+      setCanResend(true);
+    }
+    return () => clearInterval(timer);
+  }, [step, countdown]);
+
+  // STEP 1: Submit details and send Email OTP
+  const handleProceedToOtp = async (e) => {
     e.preventDefault();
+    if (!isPasswordValid) {
+      setError('Please ensure your password meets all 3 security requirements.');
+      return;
+    }
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -25,50 +56,56 @@ export const Register = () => {
     try {
       setLoading(true);
       setError('');
-      await register(name, email, password, confirmPassword);
-      navigate('/dashboard', { replace: true });
+      await authService.sendOtp(email);
+      addToast(`A 6-digit security verification code has been dispatched to ${email}. Please check your inbox.`, 'info');
+      setStep(2);
+      setCountdown(60);
+      setCanResend(false);
     } catch (err) {
-      console.error('Registration failed:', err);
-      setError(err.response?.data?.message || 'Registration failed. Please check your information.');
+      console.error('Failed to send verification OTP:', err);
+      setError(err.response?.data?.message || 'Failed to send verification code. Please check your email.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Official Real Google OAuth 2.0 Identity Popup Flow
-  const triggerGoogleSignUp = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      try {
-        setLoading(true);
-        setError('');
-        const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-        });
-        const googleProfile = await userInfoRes.json();
+  // STEP 2: Resend OTP
+  const handleResendOtp = async () => {
+    if (!canResend) return;
+    try {
+      setLoading(true);
+      setError('');
+      await authService.sendOtp(email);
+      addToast(`New verification code sent to ${email}. Please check your inbox.`, 'info');
+      setCountdown(60);
+      setCanResend(false);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to resend code.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        if (googleProfile.email) {
-          await googleLogin({
-            email: googleProfile.email,
-            name: googleProfile.name || googleProfile.email.split('@')[0],
-            googleId: googleProfile.sub,
-            avatarUrl: googleProfile.picture || '',
-          });
-          navigate('/dashboard', { replace: true });
-        } else {
-          throw new Error('Could not retrieve email from Google.');
-        }
-      } catch (err) {
-        console.error('Google sign-up error:', err);
-        setError('Failed to create account with Google. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    },
-    onError: (errorResponse) => {
-      console.warn('Google OAuth error:', errorResponse);
-      setError('Google Sign-In popup was cancelled.');
-    },
-  });
+  // STEP 2: Verify OTP and complete registration
+  const handleVerifyAndRegister = async (e) => {
+    e.preventDefault();
+    if (!otp || otp.trim().length < 6) {
+      setError('Please enter the 6-digit verification code.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+      await register(name, email, password, confirmPassword, otp.trim());
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      console.error('Registration OTP verification failed:', err);
+      setError(err.response?.data?.message || 'Invalid or expired verification code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div
@@ -88,7 +125,7 @@ export const Register = () => {
           maxWidth: '460px',
           boxShadow: 'var(--shadow-xl)',
           borderRadius: 'var(--radius-xl)',
-          padding: '38px 32px',
+          padding: '36px 30px',
         }}
       >
         {/* Brand Header */}
@@ -97,13 +134,15 @@ export const Register = () => {
             className="brand-icon"
             style={{ width: '48px', height: '48px', margin: '0 auto 12px', borderRadius: '12px' }}
           >
-            <Flame size={28} />
+            {step === 1 ? <Flame size={28} /> : <ShieldCheck size={28} />}
           </div>
-          <h2 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.5px' }}>
-            Create Your Account
+          <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.5px' }}>
+            {step === 1 ? 'Create Your Account' : 'Verify Your Email'}
           </h2>
-          <p style={{ fontSize: '0.9rem', color: '#64748B', marginTop: '4px' }}>
-            Get started with FinTrack AI in seconds
+          <p style={{ fontSize: '0.875rem', color: '#64748B', marginTop: '4px' }}>
+            {step === 1
+              ? 'Register with your email to start managing your wealth'
+              : `Enter the 6-digit security code sent to ${email}`}
           </p>
         </div>
 
@@ -124,151 +163,211 @@ export const Register = () => {
           </div>
         )}
 
-        {/* Real Google OAuth Button */}
-        <button
-          type="button"
-          onClick={() => triggerGoogleSignUp()}
-          className="btn btn-secondary"
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: '12px',
-            fontSize: '0.925rem',
-            fontWeight: 600,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            borderColor: '#CBD5E1',
-            background: '#FFFFFF',
-            marginBottom: '18px',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-          }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24">
-            <path
-              fill="#4285F4"
-              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-            />
-            <path
-              fill="#34A853"
-              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-            />
-            <path
-              fill="#FBBC05"
-              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-            />
-            <path
-              fill="#EA4335"
-              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-            />
-          </svg>
-          <span>Sign up with Google</span>
-        </button>
-
-        {/* Divider */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            margin: '18px 0',
-            color: '#94A3B8',
-            fontSize: '0.8rem',
-            fontWeight: 600,
-          }}
-        >
-          <div style={{ flex: 1, height: '1px', background: '#E2E8F0' }}></div>
-          <span style={{ padding: '0 12px', textTransform: 'uppercase' }}>or register with email</span>
-          <div style={{ flex: 1, height: '1px', background: '#E2E8F0' }}></div>
-        </div>
-
-        <form onSubmit={handleRegister}>
-          <div className="form-group">
-            <label className="form-label">Full Name</label>
-            <div style={{ position: 'relative' }}>
-              <User
-                size={18}
-                style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
-              />
-              <input
-                type="text"
-                required
-                className="form-input"
-                style={{ paddingLeft: '38px' }}
-                placeholder="John Doe"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+        {/* STEP 1 FORM: NAME, EMAIL, PASSWORD */}
+        {step === 1 && (
+          <form onSubmit={handleProceedToOtp}>
+            <div className="form-group">
+              <label className="form-label">Full Name</label>
+              <div style={{ position: 'relative' }}>
+                <User
+                  size={18}
+                  style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
+                />
+                <input
+                  type="text"
+                  required
+                  className="form-input"
+                  style={{ paddingLeft: '38px' }}
+                  placeholder="e.g. Sohan Kumar Sahu"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="form-group">
-            <label className="form-label">Email Address</label>
-            <div style={{ position: 'relative' }}>
-              <Mail
-                size={18}
-                style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
-              />
-              <input
-                type="email"
-                required
-                className="form-input"
-                style={{ paddingLeft: '38px' }}
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+            <div className="form-group">
+              <label className="form-label">Email Address</label>
+              <div style={{ position: 'relative' }}>
+                <Mail
+                  size={18}
+                  style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
+                />
+                <input
+                  type="email"
+                  required
+                  className="form-input"
+                  style={{ paddingLeft: '38px' }}
+                  placeholder="name@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <div style={{ position: 'relative' }}>
-              <Lock
-                size={18}
-                style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
-              />
-              <input
-                type="password"
-                required
-                className="form-input"
-                style={{ paddingLeft: '38px' }}
-                placeholder="At least 6 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+            <div className="form-group">
+              <label className="form-label">Password</label>
+              <div style={{ position: 'relative' }}>
+                <Lock
+                  size={18}
+                  style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
+                />
+                <input
+                  type="password"
+                  required
+                  className="form-input"
+                  style={{ paddingLeft: '38px' }}
+                  placeholder="e.g. Secure@123"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+
+              {/* Live Password Strength Criteria Checklist */}
+              {password.length > 0 && (
+                <div
+                  style={{
+                    background: '#F8FAFC',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #E2E8F0',
+                    marginTop: '8px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    fontSize: '0.775rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isFirstUpper ? '#059669' : '#94A3B8', fontWeight: 600 }}>
+                    {isFirstUpper ? <Check size={14} color="#059669" /> : <X size={14} color="#94A3B8" />}
+                    <span>Starts with an Uppercase letter (e.g. 'A'-'Z')</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isMinLength ? '#059669' : '#94A3B8', fontWeight: 600 }}>
+                    {isMinLength ? <Check size={14} color="#059669" /> : <X size={14} color="#94A3B8" />}
+                    <span>Minimum 8 characters long</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: hasSpecialChar ? '#059669' : '#94A3B8', fontWeight: 600 }}>
+                    {hasSpecialChar ? <Check size={14} color="#059669" /> : <X size={14} color="#94A3B8" />}
+                    <span>Contains a special character (@, #, $, %, !, &, *)</span>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
 
-          <div className="form-group" style={{ marginBottom: '24px' }}>
-            <label className="form-label">Confirm Password</label>
-            <div style={{ position: 'relative' }}>
-              <Lock
-                size={18}
-                style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
-              />
-              <input
-                type="password"
-                required
-                className="form-input"
-                style={{ paddingLeft: '38px' }}
-                placeholder="Re-enter your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
+            <div className="form-group" style={{ marginBottom: '24px' }}>
+              <label className="form-label">Confirm Password</label>
+              <div style={{ position: 'relative' }}>
+                <Lock
+                  size={18}
+                  style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
+                />
+                <input
+                  type="password"
+                  required
+                  className="form-input"
+                  style={{ paddingLeft: '38px' }}
+                  placeholder="Re-enter your password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={loading}
-            style={{ width: '100%', padding: '12px', fontSize: '0.95rem' }}
-          >
-            {loading ? 'Creating Account...' : 'Create FinTrack Account'}
-            <ArrowRight size={16} />
-          </button>
-        </form>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+              style={{ width: '100%' }}
+            >
+              {loading ? 'Sending Code...' : 'Continue to Email Verification'}
+              <ArrowRight size={16} />
+            </button>
+          </form>
+        )}
+
+        {/* STEP 2 FORM: 6-DIGIT EMAIL OTP VERIFICATION */}
+        {step === 2 && (
+          <form onSubmit={handleVerifyAndRegister}>
+            <div style={{ background: '#FFF7ED', border: '1px solid #FFEDD5', borderRadius: '12px', padding: '16px', marginBottom: '20px', textAlign: 'center' }}>
+              <div style={{ fontSize: '0.8rem', color: '#9A3412', fontWeight: 600 }}>
+                Verification Code Sent To:
+              </div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0F172A', marginTop: '2px' }}>
+                {email}
+              </div>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '20px' }}>
+              <label className="form-label" style={{ textAlign: 'center', display: 'block', fontWeight: 700 }}>
+                Enter 6-Digit Verification Code
+              </label>
+              <div style={{ position: 'relative' }}>
+                <KeyRound
+                  size={18}
+                  style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
+                />
+                <input
+                  type="text"
+                  maxLength={6}
+                  required
+                  autoFocus
+                  className="form-input"
+                  style={{
+                    paddingLeft: '42px',
+                    textAlign: 'center',
+                    letterSpacing: '8px',
+                    fontSize: '1.4rem',
+                    fontWeight: 800,
+                    fontFamily: 'monospace',
+                  }}
+                  placeholder="••••••"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading || otp.length < 6}
+              style={{ width: '100%', marginBottom: '14px' }}
+            >
+              {loading ? 'Verifying Code...' : 'Verify & Complete Registration'}
+              <Check size={18} />
+            </button>
+
+            {/* Resend & Back options */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid #F1F5F9' }}>
+              <button
+                type="button"
+                onClick={() => { setStep(1); setError(''); }}
+                className="btn btn-secondary btn-sm"
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+              >
+                <ArrowLeft size={14} />
+                <span>Edit Email</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleResendOtp}
+                disabled={!canResend || loading}
+                className="btn btn-secondary btn-sm"
+                style={{
+                  fontSize: '0.8rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  color: canResend ? '#FF6B00' : '#94A3B8',
+                  borderColor: canResend ? '#FDBA74' : '#E2E8F0',
+                }}
+              >
+                <RefreshCw size={13} className={loading ? 'spin' : ''} />
+                <span>{canResend ? 'Resend Code' : `Resend in (${countdown}s)`}</span>
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* Login Link */}
         <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '0.875rem', color: '#64748B' }}>

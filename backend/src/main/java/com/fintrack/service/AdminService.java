@@ -84,4 +84,8 @@ public class AdminService {
         result.put("transactions", transactions);
         return result;
     }
+
+    public void deleteUser(Long userId) {
+        userRepository.deleteById(userId);
+    }
 }

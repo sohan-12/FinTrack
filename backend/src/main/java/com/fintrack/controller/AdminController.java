@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -55,5 +56,13 @@ public class AdminController {
     public ResponseEntity<AdminStatsResponse> getSystemStats() {
         AdminStatsResponse stats = adminService.getSystemStats();
         return ResponseEntity.ok(stats);
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/users/{id}")
+    public ResponseEntity<Map<String, String>> deleteUser(@PathVariable Long id) {
+        adminService.deleteUser(id);
+        Map<String, String> res = new HashMap<>();
+        res.put("message", "User and associated records deleted successfully from database.");
+        return ResponseEntity.ok(res);
     }
 }

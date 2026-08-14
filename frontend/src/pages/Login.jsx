@@ -70,14 +70,14 @@ export const Login = () => {
         }
       } catch (err) {
         console.error('Google sign-in error:', err);
-        setError('Failed to authenticate with Google. Please try again.');
+        setError(err.response?.data?.message || 'Failed to authenticate with Google. Please make sure your account is registered first.');
       } finally {
         setLoading(false);
       }
     },
     onError: (errorResponse) => {
       console.warn('Google OAuth popup error:', errorResponse);
-      setError('Google Sign-In was cancelled or encountered an issue. Please try again.');
+      setError('Google Sign-In popup was cancelled.');
     },
   });
 

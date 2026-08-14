@@ -29,6 +29,12 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- Spring Boot Mail for Real Email OTP Delivery -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- Spring JDBC (JdbcTemplate - Pure SQL, No Hibernate/JPA) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

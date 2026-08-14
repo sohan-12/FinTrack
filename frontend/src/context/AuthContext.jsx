@@ -11,6 +11,7 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(() => localStorage.getItem('fintrack_token') || null);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState([]);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const addToast = (message, type = 'success') => {
     const id = Date.now() + Math.random();
@@ -64,13 +65,13 @@ export const AuthProvider = ({ children }) => {
     return data.user;
   };
 
-  const register = async (name, email, password, confirmPassword) => {
-    const data = await authService.register(name, email, password, confirmPassword);
+  const register = async (name, email, password, confirmPassword, otp) => {
+    const data = await authService.register(name, email, password, confirmPassword, otp);
     setToken(data.token);
     setUser(data.user);
     localStorage.setItem('fintrack_token', data.token);
     localStorage.setItem('fintrack_user', JSON.stringify(data.user));
-    addToast('Account created successfully!', 'success');
+    addToast('Account created and email verified successfully!', 'success');
     return data.user;
   };
 
@@ -94,6 +95,8 @@ export const AuthProvider = ({ children }) => {
     toasts,
     addToast,
     removeToast,
+    isMobileMenuOpen,
+    setIsMobileMenuOpen,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

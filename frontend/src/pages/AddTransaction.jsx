@@ -83,7 +83,7 @@ export const AddTransaction = () => {
       />
 
       <div className="content-area">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '28px', maxWidth: '1000px', margin: '0 auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '28px', maxWidth: '1000px', margin: '0 auto' }}>
           {/* Main Transaction Form */}
           <div className="card">
             <div className="card-header">

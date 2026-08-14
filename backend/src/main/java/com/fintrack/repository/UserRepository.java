@@ -93,6 +93,18 @@ public class UserRepository {
         return jdbcTemplate.query(sql, userRowMapper, limit);
     }
 
+    public void deleteById(Long id) {
+        String deleteTxSql = "DELETE FROM transactions WHERE user_id = ?";
+        jdbcTemplate.update(deleteTxSql, id);
+        String sql = "DELETE FROM users WHERE id = ?";
+        jdbcTemplate.update(sql, id);
+    }
+
+    public void deleteByEmail(String email) {
+        Optional<User> user = findByEmail(email);
+        user.ifPresent(u -> deleteById(u.getId()));
+    }
+
     public long count() {
         String sql = "SELECT COUNT(*) FROM users";
         Long count = jdbcTemplate.queryForObject(sql, Long.class);

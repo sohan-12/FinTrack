@@ -161,7 +161,7 @@ export const HelpSupport = () => {
         </div>
 
         {/* SECTION: FAQS & SUBMIT TICKET SPLIT */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '24px', marginBottom: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', marginBottom: '24px' }}>
           {/* FAQ Accordion */}
           <div className="card">
             <div className="card-header">

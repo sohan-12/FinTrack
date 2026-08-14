@@ -145,6 +145,15 @@ public class UpiService {
         return new ArrayList<>(apps.values());
     }
 
+    public Map<String, Object> getLinkedAccounts(Long userId) {
+        Map<String, Object> result = new HashMap<>();
+        List<Map<String, Object>> apps = getUpiApps(userId);
+        long connectedCount = apps.stream().filter(a -> Boolean.TRUE.equals(a.get("connected"))).count();
+        result.put("connectedAppsCount", connectedCount);
+        result.put("apps", apps);
+        return result;
+    }
+
     public Map<String, Object> connectUpiApp(Long userId, String appId, String upiId, String phone, String otp) {
         if (appId == null || appId.trim().isEmpty()) {
             throw new BadRequestException("Invalid App ID.");

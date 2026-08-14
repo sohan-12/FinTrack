@@ -29,7 +29,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         String uri = request.getRequestURI();
-        if (uri.endsWith("/api/auth/login") || uri.endsWith("/api/auth/register") || uri.endsWith("/api/auth/google")) {
+        if (uri.endsWith("/api/auth/login") || uri.endsWith("/api/auth/register") || uri.endsWith("/api/auth/google") || uri.endsWith("/api/auth/send-otp")) {
             return true;
         }
 

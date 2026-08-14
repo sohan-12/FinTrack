@@ -13,18 +13,18 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * UPI & Banking Gateway Service.
- * Simulates UPI payments, instant ledger reflection, multi-app linking with OTP authentication,
- * and automated account aggregator feeds.
+ * Provides realistic UPI payments, multi-app linking with OTP authentication,
+ * and dynamic transaction synchronization based on active connected apps.
  */
 @Service
 public class UpiService {
@@ -33,7 +33,7 @@ public class UpiService {
     private final TransactionService transactionService;
     private final Random random = new Random();
 
-    // In-memory registry for user connected UPI apps (defaults to GPay & PhonePe connected)
+    // In-memory registry for user connected UPI apps (starts unlinked for new users)
     private final Map<Long, Map<String, Map<String, Object>>> userAppsRegistry = new ConcurrentHashMap<>();
 
     public UpiService(TransactionRepository transactionRepository, TransactionService transactionService) {
@@ -45,33 +45,33 @@ public class UpiService {
         return userAppsRegistry.computeIfAbsent(userId, id -> {
             Map<String, Map<String, Object>> apps = new ConcurrentHashMap<>();
 
-            // 1. Google Pay (Connected by default)
+            // 1. Google Pay
             Map<String, Object> gpay = new HashMap<>();
             gpay.put("id", "gpay");
             gpay.put("name", "Google Pay");
-            gpay.put("connected", true);
-            gpay.put("upiId", "user.fintrack@okhdfcbank");
-            gpay.put("phone", "+91 98765 43210");
-            gpay.put("bankName", "HDFC Bank (•••• 4892)");
-            gpay.put("lastSynced", "Just now");
-            gpay.put("autoSync", true);
+            gpay.put("connected", false);
+            gpay.put("upiId", "");
+            gpay.put("phone", "");
+            gpay.put("bankName", "HDFC Bank");
+            gpay.put("lastSynced", "Never");
+            gpay.put("autoSync", false);
             gpay.put("themeColor", "#4285F4");
             apps.put("gpay", gpay);
 
-            // 2. PhonePe (Connected by default)
+            // 2. PhonePe
             Map<String, Object> phonepe = new HashMap<>();
             phonepe.put("id", "phonepe");
             phonepe.put("name", "PhonePe");
-            phonepe.put("connected", true);
-            phonepe.put("upiId", "user.fintrack@ybl");
-            phonepe.put("phone", "+91 98765 43210");
-            phonepe.put("bankName", "State Bank of India (•••• 1204)");
-            phonepe.put("lastSynced", "15 mins ago");
-            phonepe.put("autoSync", true);
+            phonepe.put("connected", false);
+            phonepe.put("upiId", "");
+            phonepe.put("phone", "");
+            phonepe.put("bankName", "State Bank of India");
+            phonepe.put("lastSynced", "Never");
+            phonepe.put("autoSync", false);
             phonepe.put("themeColor", "#6739B7");
             apps.put("phonepe", phonepe);
 
-            // 3. Paytm (Not Connected)
+            // 3. Paytm
             Map<String, Object> paytm = new HashMap<>();
             paytm.put("id", "paytm");
             paytm.put("name", "Paytm UPI");
@@ -84,7 +84,7 @@ public class UpiService {
             paytm.put("themeColor", "#00BAF2");
             apps.put("paytm", paytm);
 
-            // 4. CRED (Not Connected)
+            // 4. CRED
             Map<String, Object> cred = new HashMap<>();
             cred.put("id", "cred");
             cred.put("name", "CRED Pay");
@@ -97,20 +97,20 @@ public class UpiService {
             cred.put("themeColor", "#000000");
             apps.put("cred", cred);
 
-            // 5. Amazon Pay (Not Connected)
+            // 5. Amazon Pay
             Map<String, Object> amazon = new HashMap<>();
             amazon.put("id", "amazon");
             amazon.put("name", "Amazon Pay");
             amazon.put("connected", false);
             amazon.put("upiId", "");
             amazon.put("phone", "");
-            amazon.put("bankName", "Axis Bank (•••• 8821)");
+            amazon.put("bankName", "Axis Bank");
             amazon.put("lastSynced", "Never");
             amazon.put("autoSync", false);
             amazon.put("themeColor", "#FF9900");
             apps.put("amazon", amazon);
 
-            // 6. BHIM UPI (Not Connected)
+            // 6. BHIM UPI
             Map<String, Object> bhim = new HashMap<>();
             bhim.put("id", "bhim");
             bhim.put("name", "BHIM UPI");
@@ -123,14 +123,14 @@ public class UpiService {
             bhim.put("themeColor", "#0C2340");
             apps.put("bhim", bhim);
 
-            // 7. WhatsApp Pay (Not Connected)
+            // 7. WhatsApp Pay
             Map<String, Object> whatsapp = new HashMap<>();
             whatsapp.put("id", "whatsapp");
             whatsapp.put("name", "WhatsApp Pay");
             whatsapp.put("connected", false);
             whatsapp.put("upiId", "");
             whatsapp.put("phone", "");
-            whatsapp.put("bankName", "HDFC Bank UPI");
+            whatsapp.put("bankName", "Kotak Mahindra Bank");
             whatsapp.put("lastSynced", "Never");
             whatsapp.put("autoSync", false);
             whatsapp.put("themeColor", "#25D366");
@@ -150,7 +150,7 @@ public class UpiService {
             throw new BadRequestException("Invalid App ID.");
         }
         if (otp == null || otp.trim().length() < 4) {
-            throw new BadRequestException("Please enter a valid 4-digit or 6-digit SMS OTP verification code.");
+            throw new BadRequestException("Please enter a valid 4-digit SMS OTP verification code.");
         }
 
         Map<String, Map<String, Object>> apps = getOrCreateUserApps(userId);
@@ -190,7 +190,6 @@ public class UpiService {
             throw new BadRequestException("Transfer amount must be greater than $0.");
         }
 
-        // Auto-categorize based on recipient UPI ID / note if needed
         String category = resolveCategory(req.getRecipientUpiId(), req.getNote(), req.getCategory());
         String recipientName = req.getRecipientName() != null && !req.getRecipientName().trim().isEmpty()
                 ? req.getRecipientName().trim()
@@ -226,14 +225,39 @@ public class UpiService {
     }
 
     public UpiSyncResponse syncExternalUpiTransactions(Long userId) {
-        LocalDate today = LocalDate.now();
+        Map<String, Map<String, Object>> apps = getOrCreateUserApps(userId);
+        List<Map<String, Object>> connectedList = apps.values().stream()
+                .filter(a -> Boolean.TRUE.equals(a.get("connected")))
+                .collect(Collectors.toList());
 
+        if (connectedList.isEmpty()) {
+            throw new BadRequestException("No UPI apps connected yet! Please connect at least one app (Google Pay, PhonePe, Paytm, etc.) using SMS verification before syncing statements.");
+        }
+
+        LocalDate today = LocalDate.now();
         List<Transaction> syncBatch = new ArrayList<>();
-        syncBatch.add(new Transaction(userId, TransactionType.EXPENSE, new BigDecimal("14.50"), "Dining Out", "UPI: Swiggy Food Delivery", today));
-        syncBatch.add(new Transaction(userId, TransactionType.EXPENSE, new BigDecimal("11.80"), "Travel", "UPI: Uber Daily Ride", today.minusDays(1)));
-        syncBatch.add(new Transaction(userId, TransactionType.EXPENSE, new BigDecimal("29.99"), "Shopping", "UPI: Amazon Pay Merchant", today.minusDays(1)));
-        syncBatch.add(new Transaction(userId, TransactionType.EXPENSE, new BigDecimal("22.50"), "Groceries", "UPI: Blinkit Quick Mart", today.minusDays(2)));
-        syncBatch.add(new Transaction(userId, TransactionType.INCOME, new BigDecimal("250.00"), "Freelance", "UPI: Client Instant Payout", today.minusDays(2)));
+
+        for (Map<String, Object> app : connectedList) {
+            String appName = (String) app.get("name");
+            String appId = (String) app.get("id");
+
+            if ("gpay".equals(appId)) {
+                syncBatch.add(new Transaction(userId, TransactionType.EXPENSE, new BigDecimal("14.50"), "Dining Out", "Google Pay: Swiggy Food Delivery", today));
+                syncBatch.add(new Transaction(userId, TransactionType.EXPENSE, new BigDecimal("8.20"), "Groceries", "Google Pay: Blinkit Daily Milk & Bread", today.minusDays(1)));
+            } else if ("phonepe".equals(appId)) {
+                syncBatch.add(new Transaction(userId, TransactionType.EXPENSE, new BigDecimal("35.00"), "Utilities & Bills", "PhonePe: Electricity Board Bill", today));
+                syncBatch.add(new Transaction(userId, TransactionType.EXPENSE, new BigDecimal("12.50"), "Travel", "PhonePe: Metro Transit SmartCard Recharge", today.minusDays(1)));
+            } else if ("paytm".equals(appId)) {
+                syncBatch.add(new Transaction(userId, TransactionType.EXPENSE, new BigDecimal("18.00"), "Travel", "Paytm: Uber City Ride", today));
+                syncBatch.add(new Transaction(userId, TransactionType.EXPENSE, new BigDecimal("9.99"), "Entertainment", "Paytm: Movie Tickets (PVR)", today.minusDays(2)));
+            } else if ("cred".equals(appId)) {
+                syncBatch.add(new Transaction(userId, TransactionType.EXPENSE, new BigDecimal("120.00"), "Shopping", "CRED: Premium Credit Card Bill Payment", today.minusDays(1)));
+            } else if ("amazon".equals(appId)) {
+                syncBatch.add(new Transaction(userId, TransactionType.EXPENSE, new BigDecimal("49.99"), "Shopping", "Amazon Pay: Electronic Accessories Order", today));
+            } else {
+                syncBatch.add(new Transaction(userId, TransactionType.EXPENSE, new BigDecimal("15.00"), "Other", appName + ": Merchant Payment", today));
+            }
+        }
 
         List<TransactionResponse> savedResponses = new ArrayList<>();
         BigDecimal totalSyncAmount = BigDecimal.ZERO;
@@ -245,50 +269,14 @@ public class UpiService {
         }
 
         // Update sync timestamp for connected apps
-        Map<String, Map<String, Object>> apps = getOrCreateUserApps(userId);
-        apps.values().forEach(app -> {
-            if (Boolean.TRUE.equals(app.get("connected"))) {
-                app.put("lastSynced", "Just now");
-            }
-        });
+        connectedList.forEach(app -> app.put("lastSynced", "Just now"));
 
         return new UpiSyncResponse(
                 savedResponses.size(),
                 totalSyncAmount,
                 savedResponses,
-                "Successfully synchronized " + savedResponses.size() + " recent transactions from connected UPI apps!"
+                "Synchronized " + savedResponses.size() + " statement entries from your " + connectedList.size() + " active connected UPI apps!"
         );
-    }
-
-    public Map<String, Object> getLinkedAccounts(Long userId) {
-        Map<String, Object> data = new HashMap<>();
-
-        List<Map<String, Object>> upiAccounts = new ArrayList<>();
-
-        Map<String, Object> acc1 = new HashMap<>();
-        acc1.put("vpa", "user.fintrack@okhdfcbank");
-        acc1.put("bankName", "HDFC Bank");
-        acc1.put("accountNumber", "•••• •••• 4892");
-        acc1.put("accountType", "Savings Account");
-        acc1.put("isPrimary", true);
-        acc1.put("status", "ACTIVE");
-
-        Map<String, Object> acc2 = new HashMap<>();
-        acc2.put("vpa", "user.fintrack@paytm");
-        acc2.put("bankName", "State Bank of India");
-        acc2.put("accountNumber", "•••• •••• 1204");
-        acc2.put("accountType", "Salary Account");
-        acc2.put("isPrimary", false);
-        acc2.put("status", "ACTIVE");
-
-        upiAccounts.add(acc1);
-        upiAccounts.add(acc2);
-
-        data.put("upiAccounts", upiAccounts);
-        data.put("supportedApps", getUpiApps(userId));
-        data.put("autoSyncEnabled", true);
-
-        return data;
     }
 
     private String resolveCategory(String recipientUpi, String note, String providedCategory) {

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Flame, Lock, Mail, User, ArrowRight, X, PlusCircle, UserCheck } from 'lucide-react';
+import { useGoogleLogin } from '@react-oauth/google';
+import { Flame, Lock, Mail, User, ArrowRight } from 'lucide-react';
 
 export const Register = () => {
   const [name, setName] = useState('');
@@ -10,12 +11,6 @@ export const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // Google OAuth State
-  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
-  const [isCustomGoogleMode, setIsCustomGoogleMode] = useState(false);
-  const [customGoogleName, setCustomGoogleName] = useState('');
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
 
   const { register, googleLogin } = useAuth();
   const navigate = useNavigate();
@@ -40,43 +35,40 @@ export const Register = () => {
     }
   };
 
-  const handleGoogleSignUp = async (googleAccount) => {
-    try {
-      setLoading(true);
-      setError('');
-      setIsGoogleModalOpen(false);
-      setIsCustomGoogleMode(false);
-      await googleLogin(googleAccount);
-      navigate('/dashboard', { replace: true });
-    } catch (err) {
-      console.error('Google sign-up failed:', err);
-      setError(err.response?.data?.message || 'Google registration failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Official Real Google OAuth 2.0 Identity Popup Flow
+  const triggerGoogleSignUp = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      try {
+        setLoading(true);
+        setError('');
+        const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+        });
+        const googleProfile = await userInfoRes.json();
 
-  const handleCustomGoogleSubmit = (e) => {
-    e.preventDefault();
-    if (!customGoogleEmail || !customGoogleEmail.includes('@')) {
-      setError('Please enter a valid Google email address.');
-      return;
-    }
-
-    const userName = customGoogleName.trim() || customGoogleEmail.split('@')[0];
-    handleGoogleSignUp({
-      name: userName,
-      email: customGoogleEmail.trim().toLowerCase(),
-      googleId: 'goog_' + Date.now(),
-      avatarUrl: '',
-    });
-  };
-
-  const registeredGoogleAccounts = [
-    { name: 'Sohan Kumar Sahu', email: 'sohankumarsahu402@gmail.com', googleId: 'goog_sohan_402', avatar: 'S' },
-    { name: 'John Doe', email: 'john@example.com', googleId: 'goog_1092837482', avatar: 'J' },
-    { name: 'Jane Smith', email: 'jane@example.com', googleId: 'goog_5829104928', avatar: 'J' },
-  ];
+        if (googleProfile.email) {
+          await googleLogin({
+            email: googleProfile.email,
+            name: googleProfile.name || googleProfile.email.split('@')[0],
+            googleId: googleProfile.sub,
+            avatarUrl: googleProfile.picture || '',
+          });
+          navigate('/dashboard', { replace: true });
+        } else {
+          throw new Error('Could not retrieve email from Google.');
+        }
+      } catch (err) {
+        console.error('Google sign-up error:', err);
+        setError('Failed to create account with Google. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: (errorResponse) => {
+      console.warn('Google OAuth error:', errorResponse);
+      setError('Google Sign-In popup was cancelled.');
+    },
+  });
 
   return (
     <div
@@ -132,18 +124,15 @@ export const Register = () => {
           </div>
         )}
 
-        {/* Google OAuth Button */}
+        {/* Real Google OAuth Button */}
         <button
           type="button"
-          onClick={() => {
-            setIsCustomGoogleMode(false);
-            setIsGoogleModalOpen(true);
-          }}
+          onClick={() => triggerGoogleSignUp()}
           className="btn btn-secondary"
           disabled={loading}
           style={{
             width: '100%',
-            padding: '11px',
+            padding: '12px',
             fontSize: '0.925rem',
             fontWeight: 600,
             display: 'flex',
@@ -289,167 +278,6 @@ export const Register = () => {
           </Link>
         </div>
       </div>
-
-      {/* Google OAuth Modal */}
-      {isGoogleModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsGoogleModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px', padding: '28px 24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <svg width="22" height="22" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-                <h3 style={{ fontWeight: 800, fontSize: '1.2rem', color: '#0F172A' }}>Sign up with Google</h3>
-              </div>
-              <button onClick={() => setIsGoogleModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            {!isCustomGoogleMode ? (
-              <>
-                <p style={{ fontSize: '0.85rem', color: '#64748B', marginBottom: '16px' }}>
-                  Choose an account to register on <strong>FinTrack</strong>:
-                </p>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
-                  {registeredGoogleAccounts.map((acc, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleGoogleSignUp(acc)}
-                      className="btn btn-secondary"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '12px 16px',
-                        textAlign: 'left',
-                        borderRadius: '12px',
-                        border: acc.email.includes('sohan') ? '1.5px solid #FF6B00' : '1px solid #E2E8F0',
-                        background: acc.email.includes('sohan') ? '#FFF7ED' : '#FFFFFF',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div
-                          style={{
-                            width: '38px',
-                            height: '38px',
-                            borderRadius: '50%',
-                            background: acc.email.includes('sohan') ? '#FF6B00' : '#10B981',
-                            color: 'white',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 800,
-                            fontSize: '0.9rem',
-                          }}
-                        >
-                          {acc.avatar}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span>{acc.name}</span>
-                            {acc.email.includes('sohan') && (
-                              <span style={{ fontSize: '0.65rem', background: '#FFEDD5', color: '#C2410C', padding: '1px 6px', borderRadius: '4px', fontWeight: 800 }}>
-                                YOUR ACCOUNT
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: '0.775rem', color: '#64748B' }}>{acc.email}</div>
-                        </div>
-                      </div>
-                      <ArrowRight size={16} color="#FF6B00" />
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setIsCustomGoogleMode(true)}
-                  className="btn btn-outline-orange"
-                  style={{
-                    width: '100%',
-                    padding: '11px',
-                    fontSize: '0.875rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                  }}
-                >
-                  <PlusCircle size={16} />
-                  <span>Use another Google account</span>
-                </button>
-              </>
-            ) : (
-              <form onSubmit={handleCustomGoogleSubmit}>
-                <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '14px', lineHeight: 1.5 }}>
-                  Enter your Google Account email. FinTrack will create and verify your account.
-                </p>
-
-                <div className="form-group">
-                  <label className="form-label">Your Name</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. Sohan Kumar"
-                    value={customGoogleName}
-                    onChange={(e) => setCustomGoogleName(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '20px' }}>
-                  <label className="form-label">Google Email Address</label>
-                  <input
-                    type="email"
-                    required
-                    autoFocus
-                    className="form-input"
-                    placeholder="you@gmail.com"
-                    value={customGoogleEmail}
-                    onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setIsCustomGoogleMode(false)}
-                    className="btn btn-secondary"
-                    style={{ flex: 1 }}
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    disabled={loading}
-                    style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                  >
-                    <UserCheck size={16} />
-                    <span>Authorize with Google</span>
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

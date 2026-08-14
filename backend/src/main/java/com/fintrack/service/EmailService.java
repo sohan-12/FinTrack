@@ -66,10 +66,9 @@ public class EmailService {
             helper.setText(htmlContent, true);
             mailSender.send(message);
             logger.info("✅ Email successfully delivered to {}", toEmail);
-        } catch (MessagingException e) {
-            logger.error("❌ Failed to send verification email to {}: {}", toEmail, e.getMessage());
         } catch (Exception e) {
-            logger.error("❌ Unexpected error while sending email: {}", e.getMessage());
+            logger.error("❌ Failed to send verification email to {}: {}", toEmail, e.getMessage());
+            throw new com.fintrack.exception.BadRequestException("Unable to deliver verification email to '" + toEmail + "': " + e.getMessage());
         }
     }
 }

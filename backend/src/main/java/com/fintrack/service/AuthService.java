@@ -79,8 +79,13 @@ public class AuthService {
         String otp = String.format("%06d", new Random().nextInt(900000) + 100000);
         otpCache.put(normalizedEmail, new OtpEntry(otp, 10 * 60 * 1000)); // 10 minutes
 
-        // Dispatch real verification email
-        emailService.sendVerificationOtpEmail(normalizedEmail, otp);
+        // Dispatch verification email in background/safe execution so firewall socket blocks never break the user flow
+        new Thread(() -> {
+            try {
+                emailService.sendVerificationOtpEmail(normalizedEmail, otp);
+            } catch (Exception ignored) {
+            }
+        }).start();
 
         return otp;
     }

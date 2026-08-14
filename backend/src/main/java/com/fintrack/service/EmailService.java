@@ -137,7 +137,12 @@ public class EmailService {
                 helper.setFrom(fromEmail, "FinTrack Security");
                 helper.setTo(toEmail);
                 helper.setSubject("🔐 " + otp + " is your FinTrack Email Verification Code");
-                helper.setText(htmlContent, true);
+
+                String plainText = "FinTrack Security Verification Code\n\nYour 6-digit verification code is: " + otp + "\n\nThis code will expire in 10 minutes. If you did not request this code, please ignore this message.\n\n© 2026 FinTrack Inc.";
+                helper.setText(plainText, htmlContent);
+
+                message.setHeader("X-Priority", "1");
+                message.setHeader("Importance", "high");
 
                 mailSender.send(message);
                 logger.info("✅ Real email delivered via SMTP to {}", toEmail);

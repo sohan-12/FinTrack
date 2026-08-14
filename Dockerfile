@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for FinTrack Spring Boot Backend from root
+# Multi-stage Dockerfile for FinTrack Full-Stack Spring Boot + React Application
 FROM maven:3.9.6-eclipse-temurin-17 AS build
 WORKDIR /app
 COPY backend/pom.xml .

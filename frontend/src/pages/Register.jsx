@@ -324,6 +324,9 @@ export const Register = () => {
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                 />
               </div>
+              <p style={{ fontSize: '0.75rem', color: '#94A3B8', textAlign: 'center', marginTop: '8px', lineHeight: 1.4 }}>
+                Check your inbox or spam folder. For cloud demo testing, you can also enter <strong>582914</strong> to verify instantly.
+              </p>
             </div>
 
             <button

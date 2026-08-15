@@ -16,12 +16,9 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 
 /**
- * Universal Multi-Channel Email Dispatch Service for FinTrack.
- * Supports:
- * 1. Google Apps Script Webhook (GMAIL_WEBHOOK_URL) - Sends directly from personal Gmail to ANY email over HTTPS Port 443 (Zero Domain Required, 500 emails/day free)
- * 2. Brevo HTTPS REST API (BREVO_API_KEY) - Sends to ANY email over HTTPS Port 443 (300 emails/day free)
- * 3. Resend HTTPS REST API (RESEND_API_KEY) - Sends to owner email over HTTPS Port 443
- * 4. Direct SMTP (JavaMailSender) - Active on localhost and unrestricted cloud hosts
+ * Official Email Dispatch Service for FinTrack.
+ * Dispatches verification emails directly via Google Apps Script Webhook (Port 443 HTTPS)
+ * from fintrack.official.app@gmail.com with 100% cloud firewall immunity.
  */
 @Service
 public class EmailService {
@@ -31,20 +28,14 @@ public class EmailService {
     @Autowired(required = false)
     private JavaMailSender mailSender;
 
-    @Value("${spring.mail.username:}")
+    @Value("${spring.mail.username:fintrack.official.app@gmail.com}")
     private String fromEmail;
 
     @Value("${GMAIL_WEBHOOK_URL:}")
     private String gmailWebhookUrl;
 
-    @Value("${BREVO_API_KEY:}")
-    private String brevoApiKey;
-
-    @Value("${RESEND_API_KEY:}")
-    private String resendApiKey;
-
     private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(8))
+            .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.ALWAYS)
             .build();
 
@@ -73,7 +64,7 @@ public class EmailService {
                 + "<p style=\"color: #94A3B8; font-size: 11px; text-align: center; margin: 0;\">© 2026 FinTrack Inc. Secure Financial Platform</p>"
                 + "</div>";
 
-        // 1. Channel 1: Google Apps Script Webhook (Port 443 HTTPS - Sends from personal Gmail to ANY recipient worldwide)
+        // 1. Primary Channel: Google Apps Script Webhook (Port 443 HTTPS - Sends from fintrack.official.app@gmail.com)
         if (gmailWebhookUrl != null && !gmailWebhookUrl.trim().isEmpty()) {
             try {
                 String payload = "{"
@@ -86,84 +77,23 @@ public class EmailService {
                 HttpRequest req = HttpRequest.newBuilder()
                         .uri(URI.create(gmailWebhookUrl.trim()))
                         .header("Content-Type", "application/json")
-                        .timeout(Duration.ofSeconds(10))
+                        .timeout(Duration.ofSeconds(12))
                         .POST(HttpRequest.BodyPublishers.ofString(payload))
                         .build();
 
                 HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
                 if (res.statusCode() >= 200 && res.statusCode() < 400) {
-                    logger.info("✅ Real email delivered via Google Apps Script Webhook to {}", toEmail);
+                    logger.info("✅ Verification email successfully delivered via Google Apps Script to {}", toEmail);
                     return;
                 } else {
                     logger.warn("Google Apps Script response {}: {}", res.statusCode(), res.body());
                 }
             } catch (Exception e) {
-                logger.warn("Google Apps Script dispatch failed: {}", e.getMessage());
+                logger.warn("Google Apps Script Webhook dispatch failed: {}", e.getMessage());
             }
         }
 
-        // 2. Channel 2: Brevo HTTPS REST API (Port 443 HTTPS - Sends to ANY recipient)
-        if (brevoApiKey != null && !brevoApiKey.trim().isEmpty()) {
-            try {
-                String senderEmail = (fromEmail != null && !fromEmail.isEmpty()) ? fromEmail : "noreply@fintrack.com";
-                String payload = "{"
-                        + "\"sender\":{\"name\":\"FinTrack Security\",\"email\":\"" + senderEmail + "\"},"
-                        + "\"to\":[{\"email\":\"" + toEmail + "\"}],"
-                        + "\"subject\":\"🔐 " + otp + " is your FinTrack Verification Code\","
-                        + "\"htmlContent\":\"" + htmlContent.replace("\"", "\\\"") + "\""
-                        + "}";
-
-                HttpRequest req = HttpRequest.newBuilder()
-                        .uri(URI.create("https://api.brevo.com/v3/smtp/email"))
-                        .header("api-key", brevoApiKey.trim())
-                        .header("Content-Type", "application/json")
-                        .timeout(Duration.ofSeconds(8))
-                        .POST(HttpRequest.BodyPublishers.ofString(payload))
-                        .build();
-
-                HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-                if (res.statusCode() >= 200 && res.statusCode() < 300) {
-                    logger.info("✅ Real email delivered via Brevo HTTPS API to {}", toEmail);
-                    return;
-                } else {
-                    logger.warn("Brevo API response {}: {}", res.statusCode(), res.body());
-                }
-            } catch (Exception e) {
-                logger.warn("Brevo HTTPS API attempt failed: {}", e.getMessage());
-            }
-        }
-
-        // 3. Channel 3: Resend HTTPS REST API (Port 443 HTTPS)
-        if (resendApiKey != null && !resendApiKey.trim().isEmpty()) {
-            try {
-                String payload = "{"
-                        + "\"from\":\"FinTrack Security <onboarding@resend.dev>\","
-                        + "\"to\":[\"" + toEmail + "\"],"
-                        + "\"subject\":\"🔐 " + otp + " is your FinTrack Verification Code\","
-                        + "\"html\":\"" + htmlContent.replace("\"", "\\\"") + "\""
-                        + "}";
-
-                HttpRequest req = HttpRequest.newBuilder()
-                        .uri(URI.create("https://api.resend.com/emails"))
-                        .header("Authorization", "Bearer " + resendApiKey.trim())
-                        .header("Content-Type", "application/json")
-                        .timeout(Duration.ofSeconds(8))
-                        .POST(HttpRequest.BodyPublishers.ofString(payload))
-                        .build();
-
-                HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-                if (res.statusCode() >= 200 && res.statusCode() < 300) {
-                    logger.info("✅ Real email delivered via Resend HTTPS API to {}", toEmail);
-                    return;
-                } else {
-                    logger.warn("Resend API response {}: {}", res.statusCode(), res.body());
-                }
-            } catch (Exception e) {
-                logger.warn("Resend HTTPS API attempt failed: {}", e.getMessage());
-            }
-        }
-
-        // 4. Channel 4: Direct SMTP (Port 465 / 587 - Works on localhost & open clouds)
+        // 2. Secondary Channel: Direct SMTP (Port 465 SSL)
         if (mailSender != null && fromEmail != null && !fromEmail.trim().isEmpty()) {
             try {
                 MimeMessage message = mailSender.createMimeMessage();
@@ -173,16 +103,16 @@ public class EmailService {
                 helper.setTo(toEmail);
                 helper.setSubject("🔐 " + otp + " is your FinTrack Email Verification Code");
 
-                String plainText = "FinTrack Security Verification Code\n\nYour 6-digit verification code is: " + otp + "\n\nThis code will expire in 10 minutes. If you did not request this code, please ignore this message.\n\n© 2026 FinTrack Inc.";
+                String plainText = "FinTrack Security Verification Code\n\nYour 6-digit verification code is: " + otp + "\n\nThis code will expire in 10 minutes.\n\n© 2026 FinTrack Inc.";
                 helper.setText(plainText, htmlContent);
 
                 message.setHeader("X-Priority", "1");
                 message.setHeader("Importance", "high");
 
                 mailSender.send(message);
-                logger.info("✅ Real email delivered via SMTP to {}", toEmail);
+                logger.info("✅ Verification email successfully delivered via SMTP to {}", toEmail);
             } catch (Exception e) {
-                logger.warn("⚠️ SMTP Socket blocked on cloud host ({}). OTP [{}] is registered in memory.", e.getMessage(), otp);
+                logger.warn("SMTP Socket blocked on cloud host ({}). OTP [{}] is registered in memory.", e.getMessage(), otp);
             }
         }
     }

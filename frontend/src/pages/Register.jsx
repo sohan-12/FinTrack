@@ -324,6 +324,9 @@ export const Register = () => {
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                 />
               </div>
+              <p style={{ fontSize: '0.8rem', color: '#64748B', textAlign: 'center', marginTop: '10px' }}>
+                Please check your email inbox or spam folder.
+              </p>
             </div>
 
             <button

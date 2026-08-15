@@ -19,6 +19,7 @@
 | **Local Frontend** | Vite Dev Server | `http://localhost:5173` |
 | **Local Backend API**| Spring Boot Server | `http://localhost:8080` |
 | **Cloud Database** | Neon Serverless PostgreSQL | `ep-delicate-hat-ax0144hv-pooler.c-4.us-east-2.aws.neon.tech` |
+| **Official Email Sender**| FinTrack Official Auth | `fintrack.official.app@gmail.com` |
 
 ---
 
@@ -31,7 +32,7 @@ graph TD
     subgraph Spring_Boot_Backend ["⚡ Spring Boot 3 Backend Server (Port 8080)"]
         Router["Spring MVC REST Controllers"]
         AuthFilter["JWT & Role Security Interceptor"]
-        EmailSvc["📧 EmailService (Gmail SMTP)"]
+        EmailSvc["📧 EmailService (Google Webhook / HTTPS)"]
         AISvc["🤖 Gemini AI Service"]
         Services["Business Services (Transaction, UPI, Admin)"]
         Jdbc["Spring JdbcTemplate (Pure SQL, Zero ORM overhead)"]
@@ -41,7 +42,7 @@ graph TD
         NeonDB[("🐘 Neon Cloud Serverless PostgreSQL")]
         GoogleOAuth["🔑 Google OAuth 2.0"]
         GeminiAPI["🧠 Google Gemini 1.5 Flash API"]
-        GmailSMTP["✉️ Google Gmail SMTP Server (Port 587)"]
+        GoogleScript["✉️ Google Apps Script Webhook (Port 443 HTTPS)"]
     end
 
     Client -->|HTTPS / REST API| Router
@@ -51,7 +52,7 @@ graph TD
     Services --> AISvc
     Services --> Jdbc
     
-    EmailSvc -->|TLS / Port 587| GmailSMTP
+    EmailSvc -->|Port 443 HTTPS| GoogleScript
     AISvc -->|REST API| GeminiAPI
     Client -.->|OAuth Token Flow| GoogleOAuth
     Jdbc -->|HikariCP Connection Pool| NeonDB
@@ -61,12 +62,13 @@ graph TD
 
 ## 🚀 Key Features (Phase 1 Implemented)
 
-### 1. 🔐 Enterprise Authentication & Dual Security Flow
+### 1. 🔐 Enterprise Authentication & 2-Step Email Verification
 - **Email + Password Registration**: Enforces a strict 3-rule security password policy:
   - Minimum 8 characters long
   - Must start with an Uppercase letter (`A-Z`)
   - Must contain at least one special character (`!@#$%^&*`)
-- **Real 6-Digit Email OTP Verification**: Dispatches real verification emails via **Gmail SMTP (`spring-boot-starter-mail`)** directly to user inboxes with a 10-minute validity window.
+- **Real 6-Digit Email OTP Verification**: Dispatches real verification emails directly from **`fintrack.official.app@gmail.com`** via **Google Apps Script Webhook (Port 443 HTTPS)** to any user inbox worldwide with a 10-minute validity window.
+- **Manual Code Entry**: Clean verification interface requiring the user to check their email and manually type their 6-digit security code.
 - **Strict Google OAuth 2.0 Registration-First Flow**:
   - Automatically verifies if the Google email address exists in the Neon database.
   - Unregistered users are safely blocked with a clear warning: *"No FinTrack account found for '...'. Please register your account first."*
@@ -140,7 +142,7 @@ Phase 2D: Android SMS Parsing Engine         ────▶ Background Transact
 | **Database Access** | Spring JdbcTemplate | Pure raw SQL queries for maximum speed & zero ORM overhead |
 | **Database** | Neon Serverless PostgreSQL | Cloud PostgreSQL with connection pooling |
 | **Security** | Spring Security, jBCrypt, JJWT | BCrypt hashing, stateless HMAC-SHA256 JWT tokens |
-| **Email Delivery** | Spring Boot Starter Mail, Gmail SMTP | Real HTML verification code delivery via TLS |
+| **Email Delivery** | Google Apps Script Webhook (HTTPS) | Cloud-resilient email dispatch from `fintrack.official.app@gmail.com` |
 | **AI Engine** | Google Gemini 1.5 Flash API | Multi-turn conversational AI financial advisor |
 | **Deployment** | Render Docker / Web Service | All-in-One fullstack containerized deployment |
 
@@ -173,11 +175,11 @@ cd FinTrack
    ```env
    DB_URL=jdbc:postgresql://ep-delicate-hat-ax0144hv-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require
    DB_USERNAME=neondb_owner
-   DB_PASSWORD=npg_S6GnTmEiAe2w
-   JWT_SECRET=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
-   GEMINI_API_KEY=your_gemini_api_key
-   MAIL_USERNAME=your_email@gmail.com
-   MAIL_PASSWORD=your_16_char_gmail_app_password
+   DB_PASSWORD=your_neon_db_password
+   JWT_SECRET=your_base64_jwt_secret_key_here
+   GEMINI_API_KEY=your_gemini_api_key_here
+   MAIL_USERNAME=fintrack.official.app@gmail.com
+   GMAIL_WEBHOOK_URL=https://script.google.com/macros/s/your_google_apps_script_id/exec
    ```
 3. Run the Spring Boot application:
    ```bash
@@ -212,8 +214,7 @@ cd FinTrack
 cd frontend
 npm run build
 
-# Copy build to Spring Boot static resources
-# (Windows PowerShell)
+# Copy build to Spring Boot static resources (PowerShell)
 Remove-Item -Recurse -Force -Path '..\backend\src\main\resources\static\*'
 Copy-Item -Recurse -Path 'dist\*' -Destination '..\backend\src\main\resources\static\'
 
@@ -236,7 +237,7 @@ To inspect and manage live users and transactions directly in **pgAdmin 4**:
    - **Port**: `5432`
    - **Maintenance database**: `neondb`
    - **Username**: `neondb_owner`
-   - **Password**: `npg_S6GnTmEiAe2w`
+   - **Password**: `your_neon_db_password`
    - Check ☑️ **Save password?**
 4. **SSL Tab**:
    - **SSL mode**: `Require`

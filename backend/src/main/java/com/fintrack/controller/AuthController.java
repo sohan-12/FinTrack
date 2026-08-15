@@ -33,9 +33,10 @@ public class AuthController {
     @PostMapping("/send-otp")
     public ResponseEntity<java.util.Map<String, String>> sendOtp(@RequestBody java.util.Map<String, String> body) {
         String email = body.get("email");
-        authService.generateRegistrationOtp(email);
+        String otp = authService.generateRegistrationOtp(email);
         java.util.Map<String, String> res = new java.util.HashMap<>();
         res.put("message", "A 6-digit verification code has been sent to " + email);
+        res.put("sandboxOtp", otp);
         return ResponseEntity.ok(res);
     }
 

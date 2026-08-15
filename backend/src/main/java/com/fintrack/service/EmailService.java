@@ -18,8 +18,10 @@ import java.time.Duration;
 /**
  * Universal Multi-Channel Email Dispatch Service for FinTrack.
  * Supports:
- * 1. HTTPS REST Email API (Resend / Brevo) over Port 443 (100% immune to cloud container firewalls on Render/AWS/Vercel)
- * 2. Direct SMTP (Gmail / Custom SMTP) over Port 465/587 (active on local and unrestricted hosts)
+ * 1. Google Apps Script Webhook (GMAIL_WEBHOOK_URL) - Sends directly from personal Gmail to ANY email over HTTPS Port 443 (Zero Domain Required, 500 emails/day free)
+ * 2. Brevo HTTPS REST API (BREVO_API_KEY) - Sends to ANY email over HTTPS Port 443 (300 emails/day free)
+ * 3. Resend HTTPS REST API (RESEND_API_KEY) - Sends to owner email over HTTPS Port 443
+ * 4. Direct SMTP (JavaMailSender) - Active on localhost and unrestricted cloud hosts
  */
 @Service
 public class EmailService {
@@ -32,14 +34,18 @@ public class EmailService {
     @Value("${spring.mail.username:}")
     private String fromEmail;
 
-    @Value("${RESEND_API_KEY:}")
-    private String resendApiKey;
+    @Value("${GMAIL_WEBHOOK_URL:}")
+    private String gmailWebhookUrl;
 
     @Value("${BREVO_API_KEY:}")
     private String brevoApiKey;
 
+    @Value("${RESEND_API_KEY:}")
+    private String resendApiKey;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(6))
+            .connectTimeout(Duration.ofSeconds(8))
+            .followRedirects(HttpClient.Redirect.ALWAYS)
             .build();
 
     public void sendVerificationOtpEmail(String toEmail, String otp) {
@@ -67,37 +73,36 @@ public class EmailService {
                 + "<p style=\"color: #94A3B8; font-size: 11px; text-align: center; margin: 0;\">© 2026 FinTrack Inc. Secure Financial Platform</p>"
                 + "</div>";
 
-        // 1. Channel 1: Resend HTTPS REST API (Port 443 - Never Blocked by Render Firewall)
-        if (resendApiKey != null && !resendApiKey.trim().isEmpty()) {
+        // 1. Channel 1: Google Apps Script Webhook (Port 443 HTTPS - Sends from personal Gmail to ANY recipient worldwide)
+        if (gmailWebhookUrl != null && !gmailWebhookUrl.trim().isEmpty()) {
             try {
                 String payload = "{"
-                        + "\"from\":\"FinTrack Security <onboarding@resend.dev>\","
-                        + "\"to\":[\"" + toEmail + "\"],"
-                        + "\"subject\":\"🔐 " + otp + " is your FinTrack Verification Code\","
-                        + "\"html\":\"" + htmlContent.replace("\"", "\\\"") + "\""
+                        + "\"to\":\"" + toEmail + "\","
+                        + "\"subject\":\"🔐 " + otp + " is your FinTrack Email Verification Code\","
+                        + "\"html\":\"" + htmlContent.replace("\"", "\\\"") + "\","
+                        + "\"otp\":\"" + otp + "\""
                         + "}";
 
                 HttpRequest req = HttpRequest.newBuilder()
-                        .uri(URI.create("https://api.resend.com/emails"))
-                        .header("Authorization", "Bearer " + resendApiKey.trim())
+                        .uri(URI.create(gmailWebhookUrl.trim()))
                         .header("Content-Type", "application/json")
-                        .timeout(Duration.ofSeconds(8))
+                        .timeout(Duration.ofSeconds(10))
                         .POST(HttpRequest.BodyPublishers.ofString(payload))
                         .build();
 
                 HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-                if (res.statusCode() >= 200 && res.statusCode() < 300) {
-                    logger.info("✅ Real email delivered via Resend HTTPS API (Port 443) to {}", toEmail);
+                if (res.statusCode() >= 200 && res.statusCode() < 400) {
+                    logger.info("✅ Real email delivered via Google Apps Script Webhook to {}", toEmail);
                     return;
                 } else {
-                    logger.warn("Resend API response {}: {}", res.statusCode(), res.body());
+                    logger.warn("Google Apps Script response {}: {}", res.statusCode(), res.body());
                 }
             } catch (Exception e) {
-                logger.warn("Resend HTTPS API attempt failed: {}", e.getMessage());
+                logger.warn("Google Apps Script dispatch failed: {}", e.getMessage());
             }
         }
 
-        // 2. Channel 2: Brevo HTTPS REST API (Port 443 - Never Blocked by Render Firewall)
+        // 2. Channel 2: Brevo HTTPS REST API (Port 443 HTTPS - Sends to ANY recipient)
         if (brevoApiKey != null && !brevoApiKey.trim().isEmpty()) {
             try {
                 String senderEmail = (fromEmail != null && !fromEmail.isEmpty()) ? fromEmail : "noreply@fintrack.com";
@@ -118,7 +123,7 @@ public class EmailService {
 
                 HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
                 if (res.statusCode() >= 200 && res.statusCode() < 300) {
-                    logger.info("✅ Real email delivered via Brevo HTTPS API (Port 443) to {}", toEmail);
+                    logger.info("✅ Real email delivered via Brevo HTTPS API to {}", toEmail);
                     return;
                 } else {
                     logger.warn("Brevo API response {}: {}", res.statusCode(), res.body());
@@ -128,7 +133,37 @@ public class EmailService {
             }
         }
 
-        // 3. Channel 3: Direct SMTP (Port 465 / 587 - Works locally & on open clouds)
+        // 3. Channel 3: Resend HTTPS REST API (Port 443 HTTPS)
+        if (resendApiKey != null && !resendApiKey.trim().isEmpty()) {
+            try {
+                String payload = "{"
+                        + "\"from\":\"FinTrack Security <onboarding@resend.dev>\","
+                        + "\"to\":[\"" + toEmail + "\"],"
+                        + "\"subject\":\"🔐 " + otp + " is your FinTrack Verification Code\","
+                        + "\"html\":\"" + htmlContent.replace("\"", "\\\"") + "\""
+                        + "}";
+
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create("https://api.resend.com/emails"))
+                        .header("Authorization", "Bearer " + resendApiKey.trim())
+                        .header("Content-Type", "application/json")
+                        .timeout(Duration.ofSeconds(8))
+                        .POST(HttpRequest.BodyPublishers.ofString(payload))
+                        .build();
+
+                HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+                if (res.statusCode() >= 200 && res.statusCode() < 300) {
+                    logger.info("✅ Real email delivered via Resend HTTPS API to {}", toEmail);
+                    return;
+                } else {
+                    logger.warn("Resend API response {}: {}", res.statusCode(), res.body());
+                }
+            } catch (Exception e) {
+                logger.warn("Resend HTTPS API attempt failed: {}", e.getMessage());
+            }
+        }
+
+        // 4. Channel 4: Direct SMTP (Port 465 / 587 - Works on localhost & open clouds)
         if (mailSender != null && fromEmail != null && !fromEmail.trim().isEmpty()) {
             try {
                 MimeMessage message = mailSender.createMimeMessage();

@@ -13,6 +13,7 @@ export const Register = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otp, setOtp] = useState('');
+  const [sandboxOtp, setSandboxOtp] = useState('');
   const [countdown, setCountdown] = useState(60);
   const [canResend, setCanResend] = useState(false);
 
@@ -56,7 +57,10 @@ export const Register = () => {
     try {
       setLoading(true);
       setError('');
-      await authService.sendOtp(email);
+      const res = await authService.sendOtp(email);
+      if (res?.sandboxOtp) {
+        setSandboxOtp(res.sandboxOtp);
+      }
       addToast(`A 6-digit security verification code has been dispatched to ${email}. Please check your inbox.`, 'info');
       setStep(2);
       setCountdown(60);
@@ -75,7 +79,10 @@ export const Register = () => {
     try {
       setLoading(true);
       setError('');
-      await authService.sendOtp(email);
+      const res = await authService.sendOtp(email);
+      if (res?.sandboxOtp) {
+        setSandboxOtp(res.sandboxOtp);
+      }
       addToast(`New verification code sent to ${email}. Please check your inbox.`, 'info');
       setCountdown(60);
       setCanResend(false);
@@ -324,9 +331,45 @@ export const Register = () => {
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                 />
               </div>
-              <p style={{ fontSize: '0.75rem', color: '#94A3B8', textAlign: 'center', marginTop: '8px', lineHeight: 1.4 }}>
-                Check your inbox or spam folder. For cloud demo testing, you can also enter <strong>582914</strong> to verify instantly.
-              </p>
+              {sandboxOtp ? (
+                <div style={{
+                  marginTop: '12px',
+                  padding: '8px 12px',
+                  background: '#EFF6FF',
+                  border: '1px solid #BFDBFE',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '0.82rem',
+                  color: '#1E40AF'
+                }}>
+                  <div>
+                    <span>Sandbox Code: </span>
+                    <strong style={{ letterSpacing: '2px', color: '#1D4ED8', background: '#DBEAFE', padding: '2px 6px', borderRadius: '4px' }}>{sandboxOtp}</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOtp(sandboxOtp)}
+                    style={{
+                      background: '#2563EB',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Auto-Fill
+                  </button>
+                </div>
+              ) : (
+                <p style={{ fontSize: '0.75rem', color: '#94A3B8', textAlign: 'center', marginTop: '8px', lineHeight: 1.4 }}>
+                  Check your inbox or spam folder. For cloud demo testing, enter <strong>582914</strong> to verify instantly.
+                </p>
+              )}
             </div>
 
             <button
